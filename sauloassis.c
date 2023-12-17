@@ -47,7 +47,7 @@ int main(int argc, char *argv[])
     uint32_t R[32] = {0};
     // Memoria com 32 KiB inicializada com zero
     // uint8_t *MEM8 = (uint8_t *)(calloc(32, 1024));
-    uint32_t *MEM32 = (uint32_t *)(calloc(32, 1024));
+    uint32_t *MEM32 = (uint32_t *)(calloc(8, 1024));
 
     // mostrando dados recebidos do input
     printf("Dados do input file\n");
@@ -69,16 +69,16 @@ int main(int argc, char *argv[])
     //     // v[i] = i;
     //     // MEM32[i] =
     // }
-    uint32_t Data[31]; // mudar para o numero de inputs
+    uint32_t Data[37]; // mudar para o numero de inputs
 
-    for (int i = 0; i < 31; i++) // mudar para o numero de inputs
+    for (int i = 0; i < 37; i++) // mudar para o numero de inputs
     {
         fscanf(input, "0x%08X\n", &Data[i]); //
         printf("0x%08X\n", Data[i]);         //
     }
     // fclose(input);
 
-    for (int i = 0; i < 31; i++) // mudar para o numero de inputs
+    for (int i = 0; i < 37; i++) // mudar para o numero de inputs
     {
 
         MEM32[i] = Data[i];
@@ -95,7 +95,7 @@ int main(int argc, char *argv[])
     //     printf("0x%08X: 0x%02X 0x%02X 0x%02X 0x%02X\n", i, MEM8[i], MEM8[i + 1], MEM8[i + 2], MEM8[i + 3]);
     // }
     printf("\nMEM32:\n");
-    for (uint32_t i = 0; i < 32; i = i + 1) // mudar para o numero de inputs
+    for (uint32_t i = 0; i < 37; i = i + 1) // mudar para o numero de inputs
     {
         // Impressao lado a lado
         printf("0x%08X: 0x%08X (0x%02X 0x%02X 0x%02X 0x%02X)\n", i << 2, MEM32[i], ((uint8_t *)(MEM32))[(i << 2) + 3], ((uint8_t *)(MEM32))[(i << 2) + 2], ((uint8_t *)(MEM32))[(i << 2) + 1], ((uint8_t *)(MEM32))[(i << 2) + 0]);
@@ -113,24 +113,25 @@ int main(int argc, char *argv[])
     while (executa)
     {
         // Cadeia de caracteres da instrucao
-        char data[1000];
-        char name[30];
+        char sinal[10] = {0};
+        char data[1000] = {0};
+        char name[30] = {0};
         char instrucao[30] = {0};
         // Declarando operandos
         uint8_t z = 0, x = 0, i = 0, y = 0;
-        uint32_t pc = 0, xyl = 0, cmp = 0;
+        uint32_t pc = 0, xyl = 0, zyl = 0, zxl = 0, cmp = 0;
         // Carregando a instrucao de 32 bits (4 bytes) da memoria indexada pelo PC (R29) no registrador IR (R28)
         // E feita a leitura redundante com MEM8 e MEM32 para mostrar formas equivalentes de acesso
         // Se X (MEM8) for igual a Y (MEM32), entao X e Y sao iguais a X | Y (redundancia)
         // R[28] = ((MEM8[R[29] + 0] << 24) | (MEM8[R[29] + 1] << 16) | (MEM8[R[29] + 2] << 8) | (MEM8[R[29] + 3] << 0)) | MEM32[R[29] >> 2];
         R[28] = MEM32[R[29] >> 2];
-        printf("R[29] = 0x%08X\n", R[29]);
-        printf("R[28] = 0x%08X\n", R[28]);
+        // printf("R[29] = 0x%08X\n", R[29]);
+        // printf("R[28] = 0x%08X\n", R[28]);
 
         // Obtendo o codigo da operacao (6 bits mais significativos)
         uint8_t opcode = (R[28] & (0b111111 << 26)) >> 26;
         // Decodificando a instrucao buscada na memoria
-        printf(" opcode = 0x%08X\n", opcode);
+        // printf(" opcode = 0x%08X\n", opcode);
         switch (opcode)
         {
 
@@ -239,19 +240,32 @@ int main(int argc, char *argv[])
         case 0b000001:
             // Obtendo operandos
             z = (R[28] & (0b11111 << 21)) >> 21;
-            xyl = R[28] & 0x1FFFFF; /// somente essa instruão resulta movs r2,1048576
+            xyl = R[28] & 0x1FFFFF;
 
-            if (xyl & (1 << 21))
+            //   extensão de sinal de xyl
+            if (xyl)
             {
                 xyl = xyl | (0b11111111111 << 21); // com essa instruão resulta movs r2,1048576
             }
 
-            //   extensão de sinal de xyl
+            int algarismo = 31; // Posição do bit a ser verificado
+
+            int mascara = 1 << algarismo;
+
+            // Verificar se o bit é 0 ou 1 usando operação bit a bit AND (&)
+            if ((xyl & mascara) == 0)
+            {
+                sprintf(sinal, "");
+            }
+            else
+            {
+                sprintf(sinal, "-");
+            }
 
             // Execucao do comportamento
             R[z] = xyl;
-            // Formatacao da instrucao
-            sprintf(instrucao, "movs r%u,%s%u", z, (xyl >= 0) ? ("") : (""), xyl);
+            // Formatacao da instrucao ((xyl & 1 << 32) = 1) ? ("-") : ("")
+            sprintf(instrucao, "movs r%u,%s%u", z, sinal, xyl >> 12);
             // Formatacao de saida em tela (deve mudar para o arquivo de saida)
             printf("0x%08X:\t%-25s\tR%u=0x%08X\n", R[29], instrucao, z, xyl);
 
@@ -268,51 +282,54 @@ int main(int argc, char *argv[])
             z = (R[28] & (0b11111 << 21)) >> 21;
             x = (R[28] & (0b11111 << 16)) >> 16;
             y = (R[28] & (0b11111 << 11)) >> 11;
+            // xyl = R[28] & 0x1FFFFF;
+            // zyl = R[28] & 0xFFFF;
+            // zxl = R[28] & 0x7FF;
 
-            // Execucao do comportamento
+            printf("R[x]=%u\n", R[x]);
+            printf("R[y]=%u\n", R[y]);
+            // R[y]
+
+            // // Execucao do comportamento
             R[z] = R[x] + R[y];
-
+            // printf("R[z]=%u\n", R[z]);
             //  ZN ← (R[z] = 0)
             //  SN ← (R[z]31 = 1)
 
             //  CY ← (R[z]32 = 1)
 
-            switch (R[z])
+            // Posição do bit a ser verificado
+            int algarismo2 = 32;
+
+            int mascara2 = 1 << algarismo2;
+
+            if (R[z] == 0)
             {
-            case 0:
 
                 R[31] = R[31] | 0b1000000;
-                sprintf(name, "ZN");
-
-                break;
-            case 1:
-
-                R[31] = R[31] | 0b10000;
-                sprintf(name, "SN");
-
-                break;
-
-            case 3:
-
-                R[31] = R[31] | 0b1;
-                sprintf(name, "CY");
-
-                break;
-
-            default:
-                break;
-            };
-
-            //  OV ← (R[x]31 = R[y]31 ∧ R[z]31 ̸= R[x]31)
-            switch (R[x])
-            {
-            case 1:
-
-                R[31] = R[31] | 0b1000;
-                sprintf(name, "OV");
-
-                break;
+                // sprintf(name, "ZN");
             }
+
+            if ((R[z] & mascara) == 1)
+            {
+                R[31] = R[31] | 0b10000;
+                // sprintf(name, "SN");
+            }
+
+            if ((R[z] & mascara2) == 1)
+            {
+                R[31] = R[31] | 0b1;
+                // sprintf(name, "CY");
+            }
+            printf("R[31]=%08X\n", R[31]);
+            //  OV ← (R[x]31 = R[y]31 ∧ R[z]31 ̸= R[x]31)
+
+            // if (R[x])
+            // {
+
+            //     R[31] = R[31] | 0b1000;
+            //     sprintf(name, "OV");
+            // }
 
             // Formatacao da instrucao
             // pra represnetar o SR usa-se um ternario?
@@ -320,7 +337,7 @@ int main(int argc, char *argv[])
             sprintf(instrucao, "add r%u,r%u,r%u", z, x, y);
             // Formatacao de saida em tela (deve mudar para o arquivo de saida)
             // 	R3=R1+R2=0x00023456,SR=0x00000001
-            printf("0x%08X:\t%-25s\tR%u=R%u+R%u=0x%08X,%-25s=0x%08X\n", R[29], instrucao, z, x, y, R[z], name, R[31]);
+            printf("0x%08X:\t%-25s\tR%u=R%u+R%u=0x%08X,%s=0x%08X\n", R[29], instrucao, z, x, y, R[z], "SR", (R[31] == 0) ? (0) : (R[31]));
 
             sprintf(data, "0x%08X:\t%-25s\tR%u=R%u+R%u=0x%08X\n", R[29], instrucao, z, x, y, R[z]);
             // printf(data);
@@ -328,36 +345,36 @@ int main(int argc, char *argv[])
             fprintf(output, "%s", data);
 
             // para resetar o SR fazer um swit case aqui?
-            switch (R[31])
-            {
-            case 0b1000000:
-                R[31] = R[31] & ~(0b1000000);
+            // switch (R[31])
+            // {
+            // case 0b1000000:
+            //     R[31] = R[31] & ~(0b1000000);
 
-                sprintf(name, "");
+            //     sprintf(name, "");
 
-                break;
-            case 0b10000:
-                R[31] = R[31] & ~(0b10000);
+            //     break;
+            // case 0b10000:
+            //     R[31] = R[31] & ~(0b10000);
 
-                sprintf(name, "");
+            //     sprintf(name, "");
 
-                break;
-            case 0b1000:
+            //     break;
+            // case 0b1000:
 
-                R[31] = R[31] & ~(0b1000);
-                sprintf(name, "");
+            //     R[31] = R[31] & ~(0b1000);
+            //     sprintf(name, "");
 
-                break;
-            case 0b1:
+            //     break;
+            // case 0b1:
 
-                R[31] = R[31] & ~(0b1);
-                sprintf(name, "");
+            //     R[31] = R[31] & ~(0b1);
+            //     sprintf(name, "");
 
-                break;
+            //     break;
 
-            default:
-                break;
-            }
+            // default:
+            //     break;
+            // }
 
             break;
 
@@ -369,16 +386,55 @@ int main(int argc, char *argv[])
             y = (R[28] & (0b11111 << 11)) >> 11;
 
             // Execucao do comportamento
+            printf("R[x]=%u\n", R[x]);
+            printf("R[y]=%u\n", R[y]);
+            // R[y]
+
+            // // Execucao do comportamento
             R[z] = R[x] - R[y];
+            printf("R[z]=%u\n", R[z]);
+            //  ZN ← (R[z] = 0)
+            //  SN ← (R[z]31 = 1)
+
+            //  CY ← (R[z]32 = 1)
+
+            if (R[z] == 0)
+            {
+
+                R[31] = R[31] | 0b1000000;
+                // sprintf(name, "ZN");
+            }
+
+            if ((R[z] & 1 << 31))
+            {
+                R[31] = R[31] | 0b10000;
+                // sprintf(name, "SN");
+            }
+
+            if ((R[z] & 1 << 32))
+            {
+                R[31] = R[31] | 0b1;
+                // sprintf(name, "CY");
+            }
+            printf("R[31]=%08X\n", R[31]);
+            //  OV ← (R[x]31 = R[y]31 ∧ R[z]31 ̸= R[x]31)
+
+            // if (R[x])
+            // {
+
+            //     R[31] = R[31] | 0b1000;
+            //     sprintf(name, "OV");
+            // }
+
             // Formatacao da instrucao
-            // add r3,r1,r2
             // pra represnetar o SR usa-se um ternario?
-            sprintf(instrucao, "add r%u,r%u,r%u", z, x, y);
+            // add r3,r1,r2
+            sprintf(instrucao, "sub r%u,r%u,r%u", z, x, y);
             // Formatacao de saida em tela (deve mudar para o arquivo de saida)
             // 	R3=R1+R2=0x00023456,SR=0x00000001
-            printf("0x%08X:\t%-25s\tR%u=R%u-R%u=0x%08X\n", R[29], instrucao, z, x, y, R[z]);
+            printf("0x%08X:\t%-25s\tR%u=R%u-R%u=0x%08X,%s=0x%08X\n", R[29], instrucao, z, x, y, R[z], "SR", (R[31] == 0) ? (0) : (R[31]));
 
-            sprintf(data, "0x%08X:\t%-25s\tR%u=R%u-R%u=0x%08X\n", R[29], instrucao, z, x, y, R[z]);
+            sprintf(data, "0x%08X:\t%-25s\tR%u=R%u+R%u=0x%08X\n", R[29], instrucao, z, x, y, R[z]);
             // printf(data);
             //  fputs(data, output);
             fprintf(output, "%s", data);
@@ -594,13 +650,48 @@ int main(int argc, char *argv[])
             R[28] = MEM32[R[29] >> 2];
             // Execucao do comportamento
             cmp = R[x] - R[y];
+
+            //  ZN ← (CMP = 0)
+            //  SN ← (CMP31 = 1)
+
+            //  CY ← (CMP32 = 1)
+            if (cmp == 0)
+            {
+
+                R[31] = R[31] | 0b1000000;
+                // sprintf(name, "ZN");
+            }
+
+            if ((cmp & 1 << 31))
+            {
+                R[31] = R[31] | 0b10000;
+                // sprintf(name, "SN");
+            }
+
+            if ((cmp & 1 << 32))
+            {
+                R[31] = R[31] | 0b1;
+                // sprintf(name, "CY");
+            }
+            printf("R[31]=%08X\n", R[31]);
+
+            //  //  OV ← (R[x]31 ̸= R[y]31) ∧ (CMP31 ̸= R[x]31)
+
+            // if (R[x])
+            // {
+
+            //     R[31] = R[31] | 0b1000;
+            //     sprintf(name, "OV");
+            // }
+
             // Formatacao da instrucao
-            sprintf(instrucao, "cmp r%u,%u", R[28], pc);
+            sprintf(instrucao, "cmp r%u,%u", x, R[31]);
             // sprintf(instrucao, "cmp ir,pc");
             //  Formatacao de saida em tela (deve mudar para o arquivo de saida)
-            printf("0x%08X:\t%-25s\tR%u=0x%08X\n", R[29], instrucao, z, xyl);
+            // cmp ir,pc                	SR=0x00000020
+            printf("0x%08X:\t%-25s\t%s=0x%08X\n", R[29], instrucao, "SR", (R[31] == 0) ? (0) : (R[31]));
 
-            sprintf(data, "0x%08X:\t%-25s\tR%u=0x%08X\n", R[29], instrucao, z, xyl);
+            sprintf(data, "0x%08X:\t%-25s\t,%s=0x%08X\n", R[29], instrucao, "SR", (R[31] == 0) ? (0) : (R[31]));
             // printf(data);
             //  fputs(data, output);
             fprintf(output, "%s", data);
@@ -616,11 +707,24 @@ int main(int argc, char *argv[])
             // Execucao do comportamento
             R[z] = R[x] & R[y];
             // Formatacao da instrucao
+            if (R[z] == 0)
+            {
+
+                R[31] = R[31] | 0b1000000;
+                // sprintf(name, "ZN");
+            }
+
+            if ((R[z] & 1 << 31))
+            {
+                R[31] = R[31] | 0b10000;
+                // sprintf(name, "SN");
+            }
+
             // and r13,r1,r5
             sprintf(instrucao, "and r%u,r%u,r%u", z, x, y);
             // Formatacao de saida em tela (deve mudar para o arquivo de saida)
             // R13=R1&R5=0x00002410,SR=0x00000020
-            printf("0x%08X:\t%-25s\tR%u=R%u&R%u=0x%08X\n", R[29], instrucao, z, x, y, R[z]);
+            printf("0x%08X:\t%-25s\tR%u=R%u&R%u=0x%08X,SR=0x%08X\n", R[29], instrucao, z, x, y, R[z], (R[31] == 0) ? (0) : (R[31]));
 
             sprintf(data, "copriar e colar string acima");
             // printf(data);
@@ -639,10 +743,24 @@ int main(int argc, char *argv[])
             R[z] = R[x] | R[y];
             // Formatacao da instrucao
             // and r13,r1,r5
-            sprintf(instrucao, "and r%u,r%u,r%u", z, x, y);
+            if (R[z] == 0)
+            {
+
+                R[31] = R[31] | 0b1000000;
+                // sprintf(name, "ZN");
+            }
+
+            if ((R[z] & 1 << 31))
+            {
+                R[31] = R[31] | 0b10000;
+                // sprintf(name, "SN");
+            }
+
+            // and r13,r1,r5
+            sprintf(instrucao, "or r%u,r%u,r%u", z, x, y);
             // Formatacao de saida em tela (deve mudar para o arquivo de saida)
             // R13=R1&R5=0x00002410,SR=0x00000020
-            printf("0x%08X:\t%-25s\tR%u=R%u|R%u=0x%08X\n", R[29], instrucao, z, x, y, R[z]);
+            printf("0x%08X:\t%-25s\tR%u=R%u|R%u=0x%08X,SR=0x%08X\n", R[29], instrucao, z, x, y, R[z], (R[31] == 0) ? (0) : (R[31]));
 
             sprintf(data, "copriar e colar string acima");
             // printf(data);
@@ -659,11 +777,25 @@ int main(int argc, char *argv[])
             // Execucao do comportamento
             R[z] = ~R[x];
             // Formatacao da instrucao
-            // and r13,r1,r5
-            sprintf(instrucao, "and r%u,r%u", z, x);
+
+            if (R[z] == 0)
+            {
+
+                R[31] = R[31] | 0b1000000;
+                // sprintf(name, "ZN");
+            }
+
+            if ((R[z] & 1 << 31))
+            {
+                R[31] = R[31] | 0b10000;
+                // sprintf(name, "SN");
+            }
+
+            //
+            sprintf(instrucao, "not r%u,r%u", z, x);
             // Formatacao de saida em tela (deve mudar para o arquivo de saida)
-            // R13=R1&R5=0x00002410,SR=0x00000020
-            printf("0x%08X:\t%-25s\tR%u=~R%u=0x%08X\n", R[29], instrucao, z, x, R[z]);
+            // not rz,rx                	Rz=~Ry=0x????????,SR=0x????????
+            printf("0x%08X:\t%-25s\tR%u=~R%u=0x%08X,SR=0x%08X\n", R[29], instrucao, z, x, R[z], (R[31] == 0) ? (0) : (R[31]));
 
             sprintf(data, "copriar e colar string acima");
             // printf(data);
@@ -681,11 +813,23 @@ int main(int argc, char *argv[])
             // Execucao do comportamento
             R[z] = R[x] ^ R[y];
             // Formatacao da instrucao
-            // and r13,r1,r5
-            sprintf(instrucao, "and r%u,r%u,r%u", z, x, y);
+            if (R[z] == 0)
+            {
+
+                R[31] = R[31] | 0b1000000;
+                // sprintf(name, "ZN");
+            }
+
+            if ((R[z] & 1 << 31))
+            {
+                R[31] = R[31] | 0b10000;
+                // sprintf(name, "SN");
+            }
+
+            sprintf(instrucao, "xor r%u,r%u,r%u", z, x, y);
             // Formatacao de saida em tela (deve mudar para o arquivo de saida)
             // R13=R1&R5=0x00002410,SR=0x00000020
-            printf("0x%08X:\t%-25s\tR%u=R%u^R%u=0x%08X\n", R[29], instrucao, z, x, y, R[z]);
+            printf("0x%08X:\t%-25s\tR%u=R%u^R%u=0x%08X,SR=0x%08X\n", R[29], instrucao, z, x, y, R[z], (R[31] == 0) ? (0) : (R[31]));
 
             sprintf(data, "copriar e colar string acima");
             // printf(data);
@@ -1160,7 +1304,9 @@ int main(int argc, char *argv[])
         // Instrucao desconhecida
         default:
             // Exibindo mensagem de erro
-            printf("Instrucao desconhecida!\n");
+            printf("[INVALID INSTRUCTION @ 0x00000050]!\n");
+            sprintf(data, "[INVALID INSTRUCTION @ 0x%08X]!\n", R[29]);
+            fprintf(output, "%s", data);
             // Parar a execucao
             executa = 0;
         }
